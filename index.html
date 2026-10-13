@@ -18,6 +18,10 @@
       align-items: center;
       justify-content: center;
       gap: 12px;
+      min-height: 100%;
+      height: auto;
+      padding: 16px 0;
+      box-sizing: border-box;
     }
     #score {
       font-size: 20px;
@@ -30,18 +34,82 @@
       border: 1px solid #1a2030;
       border-radius: 4px;
     }
+    #ranking {
+      width: 480px;
+      max-width: calc(100vw - 32px);
+    }
+    #ranking h2 {
+      font-size: 16px;
+      font-weight: 600;
+      color: #94a3b8;
+      margin: 0 0 6px;
+    }
+    #top-status {
+      color: #94a3b8;
+      margin: 0;
+    }
+    #top-list {
+      margin: 0;
+      padding-left: 28px;
+      font-variant-numeric: tabular-nums;
+    }
+    #top-list li { padding: 2px 0; }
+    #save-form {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+    #save-form[hidden], #save-msg[hidden], #top-status[hidden] { display: none; }
+    #save-form input {
+      flex: 1;
+      font: inherit;
+      padding: 6px 10px;
+      color: #e2e8f0;
+      background: #10141c;
+      border: 1px solid #334155;
+      border-radius: 4px;
+    }
+    #save-form button {
+      font: inherit;
+      font-weight: 600;
+      padding: 6px 14px;
+      color: #10141c;
+      background: #e2e8f0;
+      border: 0;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    #save-form button:disabled { opacity: 0.5; cursor: default; }
+    #save-msg {
+      color: #ef4444;
+      margin: 0 0 8px;
+    }
   </style>
 </head>
 <body>
   <div id="score">Punkty: 0</div>
   <canvas id="board" width="480" height="480"></canvas>
 
+  <section id="ranking">
+    <form id="save-form" hidden>
+      <input id="name-input" type="text" maxlength="20" placeholder="Twoje imię" aria-label="Twoje imię" autocomplete="nickname">
+      <button id="save-btn" type="submit">Zapisz</button>
+    </form>
+    <p id="save-msg" hidden>Nie udało się zapisać — spróbuj ponownie</p>
+    <h2>Top 10</h2>
+    <p id="top-status">Ładowanie…</p>
+    <ol id="top-list"></ol>
+  </section>
+
   <script src="snake-logic.js"></script>
+  <script src="ranking.js"></script>
   <script>
     (function () {
       'use strict';
 
       var L = window.SnakeLogic;
+      var R = window.SnakeRanking;
+      var NAME_KEY = 'snake.imie';
       var CELL = 24;
       var MAX_STEPS_PER_FRAME = 5;
       var COLORS = {
@@ -62,12 +130,109 @@
       var canvas = document.getElementById('board');
       var ctx = canvas.getContext('2d');
       var scoreEl = document.getElementById('score');
+      var formEl = document.getElementById('save-form');
+      var inputEl = document.getElementById('name-input');
+      var btnEl = document.getElementById('save-btn');
+      var msgEl = document.getElementById('save-msg');
+      var topStatusEl = document.getElementById('top-status');
+      var topListEl = document.getElementById('top-list');
 
       var state = L.createState();
       var accumulator = 0;
       var lastTime = null;
+      var topList = null;      // null = lista niewczytana albo błąd pobierania
+      var gameId = 0;          // rośnie przy każdej nowej grze; chroni przed spóźnionymi odpowiedziami
+      var newRecord = false;   // bieżący wynik czeka na zapis w top 10
+      var submitting = false;
+
+      function loadName() {
+        try { return localStorage.getItem(NAME_KEY) || ''; } catch (e) { return ''; }
+      }
+
+      function saveName(name) {
+        try { localStorage.setItem(NAME_KEY, name); } catch (e) { /* brak dostępu nie psuje gry */ }
+      }
+
+      function renderTop() {
+        topListEl.textContent = '';
+        if (topList === null || topList.length === 0) {
+          topStatusEl.textContent = topList === null ? 'Ranking niedostępny' : 'Brak wyników — bądź pierwszy!';
+          topStatusEl.hidden = false;
+          return;
+        }
+        topStatusEl.hidden = true;
+        topList.forEach(function (w) {
+          var li = document.createElement('li');
+          li.textContent = w.imie + ' — ' + w.punkty;
+          topListEl.appendChild(li);
+        });
+      }
+
+      function refreshTop() {
+        return R.fetchTop().then(
+          function (rows) { topList = rows; },
+          function () { topList = null; }
+        ).then(renderTop);
+      }
+
+      function hideForm() {
+        newRecord = false;
+        formEl.hidden = true;
+        msgEl.hidden = true;
+        if (formEl.contains(document.activeElement)) document.activeElement.blur();
+      }
+
+      // Wywoływane raz, w klatce, w której gra przeszła z 'running' na 'over' albo 'won'.
+      function onGameEnd() {
+        newRecord = topList !== null && R.qualifies(topList, state.score);
+        if (!newRecord) return;
+        inputEl.value = loadName();
+        msgEl.hidden = true;
+        btnEl.disabled = submitting;
+        formEl.hidden = false;
+        inputEl.focus();
+        inputEl.select();
+      }
+
+      function newGame() {
+        state = L.createState();
+        accumulator = 0;
+        gameId++;
+        hideForm();
+      }
+
+      formEl.addEventListener('submit', function (e) {
+        e.preventDefault();
+        if (submitting) return;
+        var name = R.normalizeName(inputEl.value);
+        if (name === null) {
+          inputEl.focus();
+          return;
+        }
+        var forGame = gameId;
+        submitting = true;
+        btnEl.disabled = true;
+        msgEl.hidden = true;
+        R.submit(name, state.score).then(function () {
+          saveName(name);
+          if (forGame === gameId) hideForm();
+          return refreshTop();
+        }, function () {
+          // Po restarcie komunikat o starej grze byłby mylący.
+          if (forGame === gameId) msgEl.hidden = false;
+        }).then(function () {
+          submitting = false;
+          btnEl.disabled = false;
+        });
+      });
+
+      formEl.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape') hideForm();
+      });
 
       document.addEventListener('keydown', function (e) {
+        // Pisanie imienia (także fokus na przycisku) nie steruje wężem i nie restartuje gry.
+        if (formEl.contains(e.target)) return;
         var key = e.key.toLowerCase();
         var dirName = KEY_TO_DIR[key];
         var isRestartKey = key === ' ' || key === 'enter';
@@ -81,8 +246,7 @@
           }
           if (state.status === 'running') L.enqueueDirection(state, L.DIRECTIONS[dirName]);
         } else if (isRestartKey && (state.status === 'over' || state.status === 'won')) {
-          state = L.createState();
-          accumulator = 0;
+          newGame();
         }
       });
 
@@ -143,10 +307,11 @@
 
         if (state.status === 'ready') {
           drawOverlay(['Strzałki lub WSAD — start']);
-        } else if (state.status === 'over') {
-          drawOverlay(['Koniec gry · Punkty: ' + state.score, 'Spacja — nowa gra']);
-        } else if (state.status === 'won') {
-          drawOverlay(['Wygrana! Plansza zapełniona', 'Spacja — nowa gra']);
+        } else if (state.status === 'over' || state.status === 'won') {
+          var lines = [state.status === 'won' ? 'Wygrana! Plansza zapełniona' : 'Koniec gry · Punkty: ' + state.score];
+          if (newRecord) lines.push('Nowy wynik w top 10 — wpisz imię pod planszą');
+          lines.push('Spacja — nowa gra');
+          drawOverlay(lines);
         }
       }
 
@@ -164,6 +329,7 @@
             L.step(state);
             steps++;
           }
+          if (state.status === 'over' || state.status === 'won') onGameEnd();
         } else {
           accumulator = 0;
         }
@@ -172,6 +338,7 @@
         requestAnimationFrame(frame);
       }
 
+      refreshTop();
       requestAnimationFrame(frame);
     })();
   </script>
