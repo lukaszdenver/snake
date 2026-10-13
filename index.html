@@ -34,34 +34,56 @@
       border: 1px solid #1a2030;
       border-radius: 4px;
     }
-    #ranking {
+    #topbar {
       width: 480px;
       max-width: calc(100vw - 32px);
-    }
-    #ranking h2 {
-      font-size: 16px;
-      font-weight: 600;
-      color: #94a3b8;
-      margin: 0 0 6px;
-    }
-    #top-status {
-      color: #94a3b8;
-      margin: 0;
-    }
-    #top-list {
-      margin: 0;
-      padding-left: 28px;
-      font-variant-numeric: tabular-nums;
-    }
-    #top-list li { padding: 2px 0; }
-    #save-form {
       display: flex;
-      gap: 8px;
-      margin-bottom: 8px;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 12px;
     }
-    #save-form[hidden], #save-msg[hidden], #top-status[hidden] { display: none; }
-    #save-form input {
+    #player { color: #94a3b8; }
+    #player strong { color: #e2e8f0; }
+    .link {
+      font: inherit;
+      color: #93c5fd;
+      background: none;
+      border: 0;
+      padding: 0;
+      cursor: pointer;
+      text-decoration: underline;
+    }
+    #board-wrap { position: relative; }
+    #auth-card {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 300px;
+      max-width: calc(100% - 32px);
+      box-sizing: border-box;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      background: rgba(16, 20, 28, 0.94);
+      border: 1px solid #334155;
+      border-radius: 8px;
+    }
+    .tabs { display: flex; gap: 4px; margin-bottom: 4px; }
+    .tab {
       flex: 1;
+      font: inherit;
+      padding: 6px 0;
+      color: #94a3b8;
+      background: none;
+      border: 0;
+      border-bottom: 2px solid #334155;
+      cursor: pointer;
+    }
+    .tab.active { color: #e2e8f0; border-bottom-color: #e2e8f0; font-weight: 600; }
+    #auth-card label { display: flex; flex-direction: column; gap: 4px; font-size: 14px; color: #94a3b8; }
+    #auth-card input {
       font: inherit;
       padding: 6px 10px;
       color: #e2e8f0;
@@ -69,39 +91,84 @@
       border: 1px solid #334155;
       border-radius: 4px;
     }
-    #save-form button {
+    .primary {
       font: inherit;
       font-weight: 600;
-      padding: 6px 14px;
+      padding: 8px 14px;
       color: #10141c;
       background: #e2e8f0;
       border: 0;
       border-radius: 4px;
       cursor: pointer;
     }
-    #save-form button:disabled { opacity: 0.5; cursor: default; }
-    #save-msg {
-      color: #ef4444;
-      margin: 0 0 8px;
+    .primary:disabled { opacity: 0.5; cursor: default; }
+    #auth-msg { color: #fca5a5; margin: 0; font-size: 14px; }
+    #save-status { margin: 0; color: #94a3b8; }
+    #ranking {
+      width: 480px;
+      max-width: calc(100vw - 32px);
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
     }
+    @media (max-width: 520px) {
+      #ranking { grid-template-columns: 1fr; }
+    }
+    #ranking h2 {
+      font-size: 16px;
+      font-weight: 600;
+      color: #94a3b8;
+      margin: 0 0 6px;
+    }
+    .muted { color: #94a3b8; margin: 0; }
+    #ranking ol {
+      margin: 0;
+      padding-left: 28px;
+      font-variant-numeric: tabular-nums;
+    }
+    #ranking li { padding: 2px 0; }
+    #ranking li.me { color: #fde68a; font-weight: 600; }
+    [hidden] { display: none !important; }
   </style>
 </head>
 <body>
-  <div id="score">Punkty: 0</div>
-  <canvas id="board" width="480" height="480"></canvas>
+  <div id="topbar">
+    <div id="score">Punkty: 0</div>
+    <div id="player" hidden>Gracz: <strong id="player-login"></strong> · <button id="logout-btn" class="link" type="button">Wyloguj</button></div>
+  </div>
 
-  <section id="ranking">
-    <form id="save-form" hidden>
-      <input id="name-input" type="text" maxlength="20" placeholder="Twoje imię" aria-label="Twoje imię" autocomplete="nickname">
-      <button id="save-btn" type="submit">Zapisz</button>
+  <div id="board-wrap">
+    <canvas id="board" width="480" height="480"></canvas>
+    <form id="auth-card" hidden novalidate>
+      <div class="tabs">
+        <button id="tab-login" class="tab active" type="button">Zaloguj</button>
+        <button id="tab-signup" class="tab" type="button">Załóż konto</button>
+      </div>
+      <label>Login <input id="auth-login" type="text" autocomplete="username" autocapitalize="none" spellcheck="false"></label>
+      <label>Hasło <input id="auth-password" type="password" autocomplete="current-password"></label>
+      <label id="repeat-row" hidden>Powtórz hasło <input id="auth-repeat" type="password" autocomplete="new-password"></label>
+      <p id="auth-msg" hidden></p>
+      <button id="auth-submit" class="primary" type="submit">Zaloguj</button>
     </form>
-    <p id="save-msg" hidden>Nie udało się zapisać — spróbuj ponownie</p>
-    <h2>Top 10</h2>
-    <p id="top-status">Ładowanie…</p>
-    <ol id="top-list"></ol>
+  </div>
+
+  <p id="save-status" hidden><span id="save-text"></span> <button id="retry-btn" class="link" type="button" hidden>Spróbuj ponownie</button></p>
+
+  <section id="ranking" hidden>
+    <div>
+      <h2>Moje najlepsze</h2>
+      <p id="my-status" class="muted">Ładowanie…</p>
+      <ol id="my-list"></ol>
+    </div>
+    <div>
+      <h2>Top 10 wszystkich</h2>
+      <p id="global-status" class="muted">Ładowanie…</p>
+      <ol id="global-list"></ol>
+    </div>
   </section>
 
   <script src="snake-logic.js"></script>
+  <script src="konto.js"></script>
   <script src="ranking.js"></script>
   <script src="tlo-animacja.js"></script>
   <script>
@@ -110,8 +177,7 @@
 
       var L = window.SnakeLogic;
       var R = window.SnakeRanking;
-      var NAME_KEY = 'snake.imie';
-      var FOCUS_DELAY_MS = 400;
+      var A = window.SnakeAccount;
       var CELL = 24;
       var MAX_STEPS_PER_FRAME = 5;
       var COLORS = {
@@ -153,114 +219,257 @@
       var sky = window.SnakeSky.createSky(canvas.width, canvas.height);
       var reducedMotion = window.matchMedia ? window.matchMedia('(prefers-reduced-motion: reduce)') : null;
       var scoreEl = document.getElementById('score');
-      var formEl = document.getElementById('save-form');
-      var inputEl = document.getElementById('name-input');
-      var btnEl = document.getElementById('save-btn');
-      var msgEl = document.getElementById('save-msg');
-      var topStatusEl = document.getElementById('top-status');
-      var topListEl = document.getElementById('top-list');
+      var playerEl = document.getElementById('player');
+      var playerLoginEl = document.getElementById('player-login');
+      var logoutBtn = document.getElementById('logout-btn');
+      var authCard = document.getElementById('auth-card');
+      var tabLogin = document.getElementById('tab-login');
+      var tabSignup = document.getElementById('tab-signup');
+      var loginEl = document.getElementById('auth-login');
+      var passwordEl = document.getElementById('auth-password');
+      var repeatRow = document.getElementById('repeat-row');
+      var repeatEl = document.getElementById('auth-repeat');
+      var authMsgEl = document.getElementById('auth-msg');
+      var authSubmitBtn = document.getElementById('auth-submit');
+      var saveStatusEl = document.getElementById('save-status');
+      var saveTextEl = document.getElementById('save-text');
+      var retryBtn = document.getElementById('retry-btn');
+      var rankingEl = document.getElementById('ranking');
+      var myStatusEl = document.getElementById('my-status');
+      var myListEl = document.getElementById('my-list');
+      var globalStatusEl = document.getElementById('global-status');
+      var globalListEl = document.getElementById('global-list');
+
+      var MESSAGES = {
+        bad_login: 'Login: 3–20 znaków — litery, cyfry, _',
+        too_short: 'Hasło musi mieć co najmniej 8 znaków',
+        too_long: 'Hasło jest za długie',
+        mismatch: 'Hasła się różnią',
+        login_taken: 'Ten login jest już zajęty',
+        invalid_credentials: 'Zły login lub hasło',
+        weak_password: 'Hasło jest za słabe',
+        network: 'Brak połączenia — spróbuj ponownie',
+        unknown: 'Coś poszło nie tak — spróbuj ponownie',
+        session_expired: 'Sesja wygasła — zaloguj się ponownie'
+      };
 
       var state = L.createState();
       var accumulator = 0;
       var lastTime = null;
-      var topList = null;      // null = lista niewczytana albo błąd pobierania
-      var gameId = 0;          // rośnie przy każdej nowej grze; chroni przed spóźnionymi odpowiedziami
-      var newRecord = false;   // bieżący wynik czeka na zapis w top 10
-      var submitting = false;
+      var session = null;       // zalogowany gracz albo null
+      var authEpoch = 0;        // rośnie przy każdym zalogowaniu i wylogowaniu; odpowiedzi ze starej epoki są ignorowane
+      var gameId = 0;           // rośnie przy każdej nowej grze; chroni przed spóźnionymi odpowiedziami zapisu
+      var mode = 'login';       // 'login' albo 'signup'
+      var authBusy = false;
+      var myTop = null;         // null = lista niewczytana albo błąd pobierania
+      var globalTop = null;
+      var personalBest = false;
+      var saving = false;
+      var retryScore = 0;
 
-      function loadName() {
-        try { return localStorage.getItem(NAME_KEY) || ''; } catch (e) { return ''; }
+      function setMode(next) {
+        mode = next;
+        tabLogin.classList.toggle('active', next === 'login');
+        tabSignup.classList.toggle('active', next === 'signup');
+        repeatRow.hidden = next !== 'signup';
+        passwordEl.autocomplete = next === 'signup' ? 'new-password' : 'current-password';
+        authSubmitBtn.textContent = next === 'signup' ? 'Załóż konto' : 'Zaloguj';
+        showAuthMessage(null);
       }
 
-      function saveName(name) {
-        try { localStorage.setItem(NAME_KEY, name); } catch (e) { /* brak dostępu nie psuje gry */ }
+      function showAuthMessage(text) {
+        authMsgEl.textContent = text || '';
+        authMsgEl.hidden = !text;
       }
 
-      function renderTop() {
-        topListEl.textContent = '';
-        if (topList === null || topList.length === 0) {
-          topStatusEl.textContent = topList === null ? 'Ranking niedostępny' : 'Brak wyników — bądź pierwszy!';
-          topStatusEl.hidden = false;
-          return;
-        }
-        topStatusEl.hidden = true;
-        topList.forEach(function (w) {
-          var li = document.createElement('li');
-          li.textContent = w.imie + ' — ' + w.punkty;
-          topListEl.appendChild(li);
-        });
+      function showSaveStatus(text, canRetry) {
+        saveTextEl.textContent = text;
+        retryBtn.hidden = !canRetry;
+        saveStatusEl.hidden = false;
       }
 
-      function refreshTop() {
-        return R.fetchTop().then(
-          function (rows) { topList = rows; },
-          function () { topList = null; }
-        ).then(renderTop);
-      }
-
-      function hideForm() {
-        newRecord = false;
-        formEl.hidden = true;
-        msgEl.hidden = true;
-        if (formEl.contains(document.activeElement)) document.activeElement.blur();
-      }
-
-      // Wywoływane raz, w klatce, w której gra przeszła z 'running' na 'over' albo 'won'.
-      function onGameEnd() {
-        newRecord = topList !== null && R.qualifies(topList, state.score);
-        if (!newRecord) return;
-        inputEl.value = loadName();
-        msgEl.hidden = true;
-        btnEl.disabled = submitting;
-        formEl.hidden = false;
-        var forGame = gameId;
-        // Opóźnienie: klawisze WSAD wciśnięte tuż przed śmiercią nie nadpisują zapamiętanego imienia.
-        setTimeout(function () {
-          if (forGame !== gameId || formEl.hidden) return;
-          inputEl.focus();
-          inputEl.select();
-        }, FOCUS_DELAY_MS);
+      function blurInside(el) {
+        if (el.contains(document.activeElement)) document.activeElement.blur();
       }
 
       function newGame() {
         state = L.createState();
         accumulator = 0;
         gameId++;
-        hideForm();
+        personalBest = false;
+        saving = false;
+        saveStatusEl.hidden = true;
       }
 
-      formEl.addEventListener('submit', function (e) {
-        e.preventDefault();
-        if (submitting) return;
-        var name = R.normalizeName(inputEl.value);
-        if (name === null) {
-          inputEl.focus();
+      function showLoggedOut(message) {
+        authEpoch++;
+        session = null;
+        myTop = null;
+        globalTop = null;
+        newGame();
+        playerEl.hidden = true;
+        rankingEl.hidden = true;
+        passwordEl.value = '';
+        repeatEl.value = '';
+        setMode('login');
+        showAuthMessage(message);
+        authCard.hidden = false;
+        loginEl.focus();
+      }
+
+      function showLoggedIn(s) {
+        authEpoch++;
+        session = s;
+        passwordEl.value = '';
+        repeatEl.value = '';
+        blurInside(authCard);
+        authCard.hidden = true;
+        playerLoginEl.textContent = s.login;
+        playerEl.hidden = false;
+        myTop = null;
+        globalTop = null;
+        renderLists(true);
+        rankingEl.hidden = false;
+        refreshLists();
+      }
+
+      // Ważna sesja dla zapytania; gdy nie da się jej odnowić, gracz wraca do karty logowania.
+      function withSession(epoch, fn) {
+        return A.validSession().then(function (s) {
+          if (epoch !== authEpoch) throw new Error('stale');
+          session = s;
+          return fn(s);
+        }, function (err) {
+          if (err && err.code === 'session_expired' && epoch === authEpoch) showLoggedOut(MESSAGES.session_expired);
+          throw err;
+        });
+      }
+
+      function formatDate(iso) {
+        var d = new Date(iso);
+        function two(n) { return (n < 10 ? '0' : '') + n; }
+        return two(d.getDate()) + '.' + two(d.getMonth() + 1) + '.' + d.getFullYear();
+      }
+
+      function renderList(listEl, statusEl, rows, emptyText, fill, loading) {
+        listEl.textContent = '';
+        if (loading || rows === null || rows.length === 0) {
+          statusEl.textContent = loading ? 'Ładowanie…' : rows === null ? 'Ranking niedostępny' : emptyText;
+          statusEl.hidden = false;
           return;
         }
-        var forGame = gameId;
-        submitting = true;
-        btnEl.disabled = true;
-        msgEl.hidden = true;
-        R.submit(name, state.score).then(function () {
-          saveName(name);
-          if (forGame === gameId) hideForm();
-          return refreshTop();
+        statusEl.hidden = true;
+        rows.forEach(function (row) {
+          var li = document.createElement('li');
+          fill(li, row);
+          listEl.appendChild(li);
+        });
+      }
+
+      function renderLists(loading) {
+        renderList(myListEl, myStatusEl, myTop, 'Brak wyników — zagraj pierwszą grę!', function (li, w) {
+          li.textContent = w.punkty + ' pkt · ' + formatDate(w.utworzono);
+        }, loading);
+        renderList(globalListEl, globalStatusEl, globalTop, 'Brak wyników — bądź pierwszy!', function (li, w) {
+          li.textContent = w.login + ' — ' + w.punkty;
+          if (session && w.login === session.login) li.className = 'me';
+        }, loading);
+      }
+
+      function refreshLists() {
+        var epoch = authEpoch;
+        withSession(epoch, function (s) {
+          // Każda lista osobno: błąd jednej nie gasi drugiej.
+          return Promise.all([
+            R.fetchMyTop(s).then(null, function () { return null; }),
+            R.fetchGlobalTop(s).then(null, function () { return null; })
+          ]);
+        }).then(function (lists) {
+          if (epoch !== authEpoch) return;
+          myTop = lists[0];
+          globalTop = lists[1];
+          renderLists(false);
         }, function () {
-          // Po restarcie albo zamknięciu formularza (Esc) komunikat nie miałby czego dotyczyć.
-          if (forGame === gameId && !formEl.hidden) msgEl.hidden = false;
+          if (epoch !== authEpoch) return;
+          myTop = null;
+          globalTop = null;
+          renderLists(false);
+        });
+      }
+
+      function saveScore(score) {
+        var epoch = authEpoch;
+        var forGame = gameId;
+        saving = true;
+        retryScore = score;
+        showSaveStatus('Zapisywanie…', false);
+        withSession(epoch, function (s) {
+          return R.submit(s, score);
         }).then(function () {
-          submitting = false;
-          btnEl.disabled = false;
+          if (epoch !== authEpoch) return;
+          if (forGame === gameId) showSaveStatus('Wynik zapisany', false);
+          refreshLists();
+        }, function (err) {
+          // Po wylogowaniu, nowej grze albo wygaśnięciu sesji komunikat nie miałby czego dotyczyć.
+          if (epoch !== authEpoch || forGame !== gameId || (err && err.code === 'session_expired')) return;
+          showSaveStatus('Nie udało się zapisać', true);
+        }).then(function () {
+          if (forGame === gameId) saving = false;
+        });
+      }
+
+      // Wywoływane raz, w klatce, w której gra przeszła z 'running' na 'over' albo 'won'.
+      function onGameEnd() {
+        personalBest = myTop !== null && R.isPersonalBest(myTop, state.score);
+        if (state.score >= 1) saveScore(state.score);
+      }
+
+      retryBtn.addEventListener('click', function () {
+        if (saving) return;
+        saveScore(retryScore);
+      });
+
+      tabLogin.addEventListener('click', function () { setMode('login'); });
+      tabSignup.addEventListener('click', function () { setMode('signup'); });
+
+      authCard.addEventListener('submit', function (e) {
+        e.preventDefault();
+        if (authBusy) return;
+        var login = A.normalizeLogin(loginEl.value);
+        if (login === null) {
+          showAuthMessage(MESSAGES.bad_login);
+          return;
+        }
+        var passwordProblem = A.passwordError(passwordEl.value);
+        if (passwordProblem) {
+          showAuthMessage(MESSAGES[passwordProblem]);
+          return;
+        }
+        if (mode === 'signup' && repeatEl.value !== passwordEl.value) {
+          showAuthMessage(MESSAGES.mismatch);
+          return;
+        }
+        authBusy = true;
+        authSubmitBtn.disabled = true;
+        showAuthMessage(null);
+        var attempt = mode === 'signup' ? A.signUp(login, passwordEl.value) : A.signIn(login, passwordEl.value);
+        attempt.then(showLoggedIn, function (err) {
+          showAuthMessage(MESSAGES[err && err.code] || MESSAGES.unknown);
+        }).then(function () {
+          authBusy = false;
+          authSubmitBtn.disabled = false;
         });
       });
 
-      formEl.addEventListener('keydown', function (e) {
-        if (e.key === 'Escape') hideForm();
+      logoutBtn.addEventListener('click', function () {
+        A.signOut();
+        showLoggedOut(null);
       });
 
       document.addEventListener('keydown', function (e) {
-        // Pisanie imienia (także fokus na przycisku) nie steruje wężem i nie restartuje gry.
-        if (formEl.contains(e.target)) return;
+        // Pisanie w karcie logowania i klawisze na przyciskach nie sterują wężem i nie restartują gry.
+        if (authCard.contains(e.target) || playerEl.contains(e.target) || saveStatusEl.contains(e.target)) return;
+        if (!session) return;
         var key = e.key.toLowerCase();
         var dirName = KEY_TO_DIR[key];
         var isRestartKey = key === ' ' || key === 'enter';
@@ -384,11 +593,13 @@
 
         scoreEl.textContent = 'Punkty: ' + state.score;
 
-        if (state.status === 'ready') {
+        if (!session) {
+          drawOverlay([]);  // karta logowania leży nad przyciemnioną planszą
+        } else if (state.status === 'ready') {
           drawOverlay(['Strzałki lub WSAD — start']);
         } else if (state.status === 'over' || state.status === 'won') {
           var lines = [state.status === 'won' ? 'Wygrana! Plansza zapełniona' : 'Koniec gry · Punkty: ' + state.score];
-          if (newRecord) lines.push('Nowy wynik w top 10 — wpisz imię pod planszą');
+          if (personalBest) lines.push('Nowy rekord osobisty!');
           lines.push('Spacja — nowa gra');
           drawOverlay(lines);
         }
@@ -417,7 +628,12 @@
         requestAnimationFrame(frame);
       }
 
-      refreshTop();
+      var restored = A.currentSession();
+      if (restored) {
+        showLoggedIn(restored);
+      } else {
+        showLoggedOut(null);
+      }
       requestAnimationFrame(frame);
     })();
   </script>
