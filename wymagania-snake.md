@@ -1,26 +1,28 @@
 # Snake — specyfikacja projektowa
 
-- **Data:** 2026-09-29
+- **Data:** 2026-09-29, rozszerzona o ranking 2026-10-13
 - **Status:** zatwierdzona, gotowa do planu implementacji
-- **Stos:** HTML5 + Canvas 2D + JavaScript (ES5/ES2015, bez modułów), zero zależności
+- **Stos:** HTML5 + Canvas 2D + JavaScript (ES5/ES2015, bez modułów), zero zależności w kodzie; ranking korzysta z zewnętrznej usługi Supabase (sekcja 9)
 
 ## 1. Cel i zakres
 
 Klasyczny Snake uruchamiany dwuklikiem na pliku `index.html`, bez serwera, bez `npm install`, bez kroku budowania. Wąż porusza się po siatce, zjada jedzenie, rośnie i przyspiesza. Plansza zawija się na krawędziach — wyjście poza krawędź przenosi głowę na przeciwległą stronę, bez utraty gry. Jedynym końcem gry jest ugryzienie własnego ciała.
 
-**W zakresie:** siatka, ruch, jedzenie, wzrost, punktacja, rosnące tempo, zawijanie planszy na krawędziach, kolizja z własnym ciałem, ekran startowy, ekran końca gry, ekran wygranej, restart, automatyczne testy logiki.
+**W zakresie:** siatka, ruch, jedzenie, wzrost, punktacja, rosnące tempo, zawijanie planszy na krawędziach, kolizja z własnym ciałem, ekran startowy, ekran końca gry, ekran wygranej, restart, automatyczne testy logiki, wspólny ranking top 10 w Supabase (sekcja 9).
 
-**Poza zakresem:** rekordy w `localStorage`, poziomy trudności, przeszkody, bonusowe jedzenie, dźwięk, sterowanie dotykowe, tabela wyników, tryb dwuosobowy, animacje ruchu między komórkami.
+**Poza zakresem:** lokalne rekordy w `localStorage` (przeglądarka pamięta tylko imię gracza), poziomy trudności, przeszkody, bonusowe jedzenie, dźwięk, sterowanie dotykowe, konta i logowanie graczy, ochrona rankingu przed sfałszowanymi wynikami, tryb dwuosobowy, animacje ruchu między komórkami.
 
 ## 2. Struktura plików
 
 | Plik | Odpowiedzialność | Zależności |
 |---|---|---|
 | `snake-logic.js` | Czysta logika gry. Zero DOM, zero Canvas, zero `window` poza jednym eksportem. | brak |
-| `index.html` | Prezentacja: Canvas, style, pętla czasu, rysowanie, odczyt klawiatury. | `snake-logic.js` |
-| `tests.html` | Runner testów logiki z wypisem wyników w przeglądarce. | `snake-logic.js` |
+| `ranking.js` | Komunikacja z rankingiem w Supabase i czyste funkcje pomocnicze rankingu. Zero DOM, zero Canvas. | brak (`fetch` przeglądarki) |
+| `index.html` | Prezentacja: Canvas, style, pętla czasu, rysowanie, odczyt klawiatury, lista top 10 i formularz imienia. | `snake-logic.js`, `ranking.js` |
+| `tests.html` | Runner testów logiki i funkcji pomocniczych rankingu z wypisem wyników w przeglądarce. | `snake-logic.js`, `ranking.js` |
+| `supabase/ranking.sql` | Skrypt tworzący tabelę rankingu, ograniczenia i reguły dostępu. Uruchamiany ręcznie w SQL Editor Supabase. | brak |
 
-Oba pliki HTML ładują logikę zwykłym `<script src="snake-logic.js"></script>`.
+Oba pliki HTML ładują skrypty zwykłym `<script src="..."></script>`.
 
 **Twardy zakaz:** żadnych modułów ES (`type="module"`, `import`, `export`). Przeglądarki blokują moduły wczytywane przez `file://` polityką CORS, co zabiłoby uruchamianie dwuklikiem. Logika wystawia się przez `window.SnakeLogic`.
 
@@ -103,12 +105,71 @@ Jeden obiekt globalny `window.SnakeLogic`:
   - `ready` — „Strzałki lub WSAD — start"
   - `over` — „Koniec gry · Punkty: N" + „Spacja — nowa gra"
   - `won` — „Wygrana! Plansza zapełniona" + „Spacja — nowa gra"
-- Paleta: tło `#10141c`, delikatna siatka `#1a2030`, ciało węża `#22c55e`, głowa `#4ade80`, jedzenie `#ef4444`, tekst `#e2e8f0`.
+- Paleta: tło `#10141c`, delikatna siatka `#1a2030`, ciało węża w tęczy (`hsl(i·25 mod 360, 90%, 60%)` dla segmentu `i`), głowa `#ffffff`, jedzenie `#ef4444`, tekst `#e2e8f0`.
 - Głowa odróżniona kolorem od ciała, żeby kierunek był czytelny.
 
-## 9. Kryteria akceptacji
+## 9. Ranking top 10 (Supabase)
 
-### 9.1 Testy automatyczne (`tests.html`)
+Wspólna lista 10 najlepszych wyników wszystkich graczy, przechowywana w projekcie Supabase `https://bakmagtitoppdzuolyvg.supabase.co`. Gra łączy się z REST API Supabase bezpośrednio przez `fetch` — bez biblioteki `supabase-js`, żeby nie ładować kodu z sieci i zachować brak zależności. Zapytania z pliku otwartego przez `file://` działają, bo Supabase odpowiada nagłówkiem `Access-Control-Allow-Origin: *`.
+
+### 9.1 Tabela `public.wyniki`
+
+| Kolumna | Typ | Ograniczenia |
+|---|---|---|
+| `id` | `bigint` | `generated always as identity`, klucz główny |
+| `imie` | `text` | `not null`, `char_length` od 1 do 20, nie może składać się z samych białych znaków |
+| `punkty` | `int` | `not null`, od 1 do 397 (397 = 400 pól − 3 segmenty startowe, czyli wygrana) |
+| `utworzono` | `timestamptz` | `not null`, domyślnie `now()` |
+
+Indeks `(punkty desc, utworzono asc)` pod zapytanie o top 10.
+
+### 9.2 Reguły dostępu
+
+- Row Level Security włączone na tabeli.
+- Rola `anon` (klucz publishable): uprawnienie `select` na całej tabeli oraz `insert` **tylko na kolumnach** `imie` i `punkty` — gracz nie ustawi sam `id` ani `utworzono`.
+- Polityki RLS: `select` dla `anon` bez warunku, `insert` dla `anon` bez warunku (ograniczenia wartości pilnują `check` na kolumnach).
+- Brak uprawnień i polityk na `update` i `delete` — wpisów nie da się zmienić ani usunąć kluczem publishable.
+- Skrypt zaczyna od odebrania wszystkich uprawnień rolom `anon` i `authenticated`, a potem nadaje tylko powyższe — niezależnie od domyślnych uprawnień projektu.
+- Klucz publishable jest wpisany w `ranking.js` i publiczny z założenia. Klucz secret nigdy nie trafia do repozytorium.
+- **Znane ograniczenie:** zmyślony wynik (w granicach 1–397) da się wysłać prosto do API z pominięciem gry. Akceptowane — ranking jest dla znajomych, a weryfikacja przebiegu gry wymagałaby serwera.
+
+### 9.3 Kolejność rankingu
+
+Sortowanie: `punkty` malejąco, przy remisie `utworzono` rosnąco (wcześniejszy wynik wyżej). Pobieranie: `GET /rest/v1/wyniki?select=imie,punkty&order=punkty.desc,utworzono.asc&limit=10`.
+
+### 9.4 API `ranking.js`
+
+Jeden obiekt globalny `window.SnakeRanking`:
+
+| Funkcja | Sygnatura | Opis |
+|---|---|---|
+| `normalizeName` | `(raw) => string \| null` | Przycina białe znaki z obu stron i skraca do 20 znaków liczonych jak w Postgresie (punkty kodowe, `Array.from`). Pusty wynik → `null`. |
+| `qualifies` | `(top, score) => boolean` | `true` gdy `score >= 1` i (`top.length < 10` albo `score > top[9].punkty`). Remis z 10. miejscem się nie kwalifikuje, bo przy remisie wygrywa starszy wpis. |
+| `fetchTop` | `() => Promise<[{imie, punkty}]>` | Pobiera top 10 wg sekcji 9.3. |
+| `submit` | `(name, score) => Promise<void>` | `POST /rest/v1/wyniki` z `{imie, punkty}` i nagłówkiem `Prefer: return=minimal`. Imię przechodzi najpierw przez `normalizeName`; `null` → odrzucona obietnica bez wysyłania. |
+
+- Każde zapytanie wysyła nagłówek `apikey` z kluczem publishable.
+- Każde zapytanie ma limit czasu 8 s (`AbortController`). Przekroczenie, błąd sieci albo status HTTP spoza 2xx → odrzucona obietnica.
+- `normalizeName` i `qualifies` są czystymi funkcjami bez sieci — testowane w `tests.html`.
+
+### 9.5 Warstwa prezentacji
+
+- Pod planszą sekcja „Top 10”: lista numerowana `miejsce. imię — punkty`. Imiona wstawiane przez `textContent` (nigdy `innerHTML`), żeby wpis z bazy nie mógł wstrzyknąć kodu do strony.
+- Lista ładuje się przy otwarciu strony („Ładowanie…”) i ponownie po udanym zapisie. Pusta tabela → „Brak wyników — bądź pierwszy!”.
+- Gdy pobranie się nie uda: „Ranking niedostępny”. Gra działa normalnie, formularz zapisu się nie pojawia.
+- **Formularz zapisu** pojawia się pod planszą, gdy `status` przechodzi w `'over'` albo `'won'` i `qualifies(top, score)` jest prawdą (wobec ostatnio pobranej listy). Zawiera pole „Twoje imię” (`maxlength=20`) i przycisk „Zapisz”.
+  - Pole dostaje fokus automatycznie i jest wstępnie wypełnione imieniem zapamiętanym w `localStorage` (klucz `snake.imie`). Odczyt i zapis `localStorage` w `try/catch` — brak dostępu nie psuje gry.
+  - `Enter` w polu albo klik „Zapisz” wysyła wynik. Na czas wysyłania przycisk jest nieaktywny.
+  - Sukces: imię zapisane w `localStorage`, formularz znika, fokus wraca do strony, lista się odświeża.
+  - Błąd: komunikat „Nie udało się zapisać — spróbuj ponownie”, formularz zostaje.
+  - `Escape` zamyka formularz bez zapisu. Każdy wynik można zapisać najwyżej raz.
+- Nakładka końca gry przy kwalifikującym się wyniku ma dodatkową linię „Nowy wynik w top 10 — wpisz imię pod planszą”.
+- Gdy fokus jest w polu formularza, globalna obsługa klawiszy (kierunki, restart spacją/Enterem) jest ignorowana — wpisywanie imienia nie steruje wężem ani nie restartuje gry.
+- Restart gry chowa niewysłany formularz.
+
+## 10. Kryteria akceptacji
+
+### 10.1 Testy automatyczne (`tests.html`)
 
 Każdy punkt to osobna asercja; runner wypisuje nazwę i wynik.
 
@@ -133,8 +194,15 @@ Każdy punkt to osobna asercja; runner wypisuje nazwę i wynik.
 19. `spawnFood` z deterministycznym `rng` na planszy niemal pełnej trafia w jedyne wolne pole.
 20. `step` na stanie `'ready'`, `'over'` i `'won'` nie zmienia niczego.
 21. Zapełnienie planszy ustawia `status: 'won'`.
+22. `normalizeName` przycina spacje z obu stron (`'  Ala  '` → `'Ala'`).
+23. `normalizeName` zwraca `null` dla pustego napisu i dla samych spacji.
+24. `normalizeName` skraca imię dłuższe niż 20 znaków do 20.
+25. `normalizeName` liczy znak spoza BMP (np. emoji) jako jeden znak.
+26. `qualifies` zwraca `true`, gdy lista ma mniej niż 10 wpisów, a wynik ≥ 1.
+27. `qualifies` zwraca `false` dla wyniku 0, nawet przy pustej liście.
+28. `qualifies` przy pełnej liście: `true` dla wyniku większego od 10. miejsca, `false` dla równego i mniejszego.
 
-### 9.2 Weryfikacja ręczna (`index.html`)
+### 10.2 Weryfikacja ręczna (`index.html`)
 
 1. Otwarcie pliku dwuklikiem z dysku pokazuje planszę i ekran startowy — bez błędów w konsoli.
 2. Pierwszy klawisz kierunku uruchamia ruch.
@@ -147,8 +215,16 @@ Każdy punkt to osobna asercja; runner wypisuje nazwę i wynik.
 9. Spacja po przegranej startuje nową grę od zera punktów i tempa startowego.
 10. Strzałki i spacja nie przewijają strony.
 11. Przełączenie na inną kartę na kilkanaście sekund i powrót nie powoduje skokowego przeskoku węża.
+12. Po otwarciu strony pod planszą widać listę top 10 (albo „Brak wyników — bądź pierwszy!”).
+13. Przegrana z wynikiem mieszczącym się w top 10 pokazuje formularz z fokusem w polu imienia; wpisywanie spacji w imieniu nie restartuje gry, a strzałki nie sterują wężem.
+14. Zapis imienia dodaje wynik do listy na właściwym miejscu; po odświeżeniu strony wpis nadal tam jest, a pole imienia przy kolejnej przegranej jest wstępnie wypełnione.
+15. Przegrana z wynikiem 0 albo poniżej 10. miejsca nie pokazuje formularza.
+16. Po wyłączeniu internetu lista pokazuje „Ranking niedostępny”, a gra działa normalnie.
+17. Imię w postaci `<b>test</b>` wyświetla się w liście dosłownie, jako tekst.
+18. Próba `PATCH` i `DELETE` na `/rest/v1/wyniki` kluczem publishable nie zmienia danych; `POST` z `punkty: 1000` albo pustym imieniem jest odrzucany przez bazę.
+19. Gra opublikowana na GitHub Pages pokazuje i zapisuje ranking tak samo jak otwarta z dysku.
 
-## 10. Decyzje odrzucone
+## 11. Decyzje odrzucone
 
 | Odrzucone | Powód |
 |---|---|
@@ -157,3 +233,7 @@ Każdy punkt to osobna asercja; runner wypisuje nazwę i wynik.
 | Koniec gry po uderzeniu w ścianę | Zastąpione zawijaniem planszy: wąż wychodzi poza krawędź i wraca po przeciwnej stronie. |
 | Siatka `<div>` zamiast Canvas | Wolniejsza i nietypowa dla gier 2D. |
 | Vitest / npm | Łamie założenie „bez instalacji i bez serwera". |
+| Biblioteka `supabase-js` z CDN | Dodaje zależność ładowaną z sieci; do dwóch zapytań wystarczy `fetch`. |
+| Konta i logowanie graczy | Za dużo pracy jak na ranking dla znajomych; imię wpisywane ręcznie wystarcza. |
+| Weryfikacja wyniku po stronie serwera (Edge Function odtwarzająca grę) | Wymaga zapisu całego przebiegu gry i własnego kodu serwerowego; ranking jest dla znajomych. |
+| Ranking w `localStorage` | Widoczny tylko na jednym komputerze — nie spełnia celu wspólnej listy. |
