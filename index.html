@@ -320,6 +320,7 @@
       function showLoggedIn(s) {
         authEpoch++;
         session = s;
+        newGame();
         passwordEl.value = '';
         repeatEl.value = '';
         blurInside(authCard);
@@ -337,6 +338,12 @@
       function withSession(epoch, fn) {
         return A.validSession().then(function (s) {
           if (epoch !== authEpoch) throw new Error('stale');
+          // W innej karcie zalogował się ktoś inny: przełączamy się na niego, a bieżące zapytanie przepada,
+          // żeby wynik tej gry nie trafił na cudze konto.
+          if (s.user_id !== session.user_id) {
+            showLoggedIn(s);
+            throw new Error('stale');
+          }
           session = s;
           return fn(s);
         }, function (err) {

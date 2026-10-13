@@ -159,7 +159,7 @@ Skrypt usuwa dawną tabelę `wyniki` razem z jej zawartością (czysty start) i 
 | `login` | `text` | `not null`, `unique`, `check (login ~ '^[a-z0-9_]{3,20}$')` |
 | `utworzono` | `timestamptz` | `not null`, domyślnie `now()` |
 
-Wiersz zakłada wyzwalacz `after insert on auth.users` (funkcja `security definer`, pusty `search_path`), biorąc `lower(raw_user_meta_data->>'login')`. Niepoprawny login → wyzwalacz łamie `check` → rejestracja się nie udaje.
+Wiersz zakłada wyzwalacz `after insert on auth.users` (funkcja `security definer`, pusty `search_path`). Login bierze się **z adresu** (część przed `@`, małymi literami), bo adres jest unikalny w Supabase Auth; metadanym od klienta się nie ufa. Adres spoza domeny `gracze.example.com`, metadane `login` niezgodne z adresem albo login łamiący `check` → wyjątek → rejestracja się nie udaje.
 
 **`public.wyniki`**
 

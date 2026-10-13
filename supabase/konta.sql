@@ -34,17 +34,24 @@ create or replace view public.najlepsze_wyniki with (security_invoker = true) as
   join public.gracze g on g.id = w.gracz_id
   order by w.gracz_id, w.punkty desc, w.utworzono asc;
 
--- Rejestracja w Supabase Auth zakłada gracza. Login z metadanych; konto założone ręcznie w panelu
--- (bez metadanych) dostaje login z części adresu przed @.
+-- Rejestracja w Supabase Auth zakłada gracza. Login zawsze bierze się z adresu <login>@gracze.example.com,
+-- bo adres jest unikalny w Supabase Auth — metadanym od klienta nie ufamy (inaczej dałoby się zająć cudzy login).
+-- Inna domena albo metadane niezgodne z adresem -> wyjątek -> konto nie powstaje.
+-- Konto założone ręcznie w panelu działa, jeśli ma adres w tej domenie.
 create or replace function public.utworz_gracza()
 returns trigger
 language plpgsql
 security definer
 set search_path = ''
 as $$
+declare
+  v_login text := lower(split_part(new.email, '@', 1));
 begin
-  insert into public.gracze (id, login)
-  values (new.id, lower(coalesce(new.raw_user_meta_data ->> 'login', split_part(new.email, '@', 1))));
+  if lower(split_part(new.email, '@', 2)) <> 'gracze.example.com'
+     or coalesce(lower(new.raw_user_meta_data ->> 'login'), v_login) <> v_login then
+    raise exception 'Konto gracza musi mieć adres <login>@gracze.example.com zgodny z loginem';
+  end if;
+  insert into public.gracze (id, login) values (new.id, v_login);
   return new;
 end;
 $$;

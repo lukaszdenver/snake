@@ -44,10 +44,11 @@
     return (body && ERROR_CODES[body.error_code]) || 'unknown';
   }
 
-  function fail(code, cause) {
+  function fail(code, cause, status) {
     var err = new Error(code);
     err.code = code;
     err.cause = cause;
+    err.status = status;
     return err;
   }
 
@@ -65,7 +66,7 @@
         clearTimeout(timer);
         var data = null;
         try { data = r.text ? JSON.parse(r.text) : null; } catch (e) { data = null; }
-        if (!r.res.ok) throw fail(authErrorCode(r.res.status, data));
+        if (!r.res.ok) throw fail(authErrorCode(r.res.status, data), data, r.res.status);
         return data;
       }, function (err) {
         clearTimeout(timer);
@@ -93,6 +94,22 @@
     try { localStorage.removeItem(SESSION_KEY); } catch (e) { /* nic do wyczyszczenia */ }
   }
 
+  // Zmiana gracza (logowanie, rejestracja, wylogowanie) unieważnia trwające odnowienie:
+  // jego wynik nie może nadpisać ani wyczyścić sesji kogoś innego.
+  var generation = 0;
+  var refreshing = null;
+
+  function changeGeneration() {
+    generation++;
+    refreshing = null;
+  }
+
+  function startSession(data, login) {
+    var session = toSession(data, login);
+    changeGeneration();
+    return store(session);
+  }
+
   function currentSession() {
     try {
       var s = JSON.parse(localStorage.getItem(SESSION_KEY));
@@ -104,46 +121,51 @@
 
   function signUp(login, password) {
     return authRequest('/signup', { email: loginToEmail(login), password: password, data: { login: login } })
-      .then(function (data) { return store(toSession(data, login)); });
+      .then(function (data) { return startSession(data, login); });
   }
 
   function signIn(login, password) {
     return authRequest('/token?grant_type=password', { email: loginToEmail(login), password: password })
-      .then(function (data) { return store(toSession(data, login)); });
+      .then(function (data) { return startSession(data, login); });
   }
 
   function signOut() {
     var s = currentSession();
+    changeGeneration();
     clear();
     if (!s) return Promise.resolve();
-    return authRequest('/logout', {}, s.access_token).then(function () {}, function () {});
+    // scope=local: wylogowanie tylko na tym urządzeniu, sesje na innych komputerach zostają.
+    return authRequest('/logout?scope=local', {}, s.access_token).then(function () {}, function () {});
   }
 
   // Jedno odnawianie naraz: Supabase rotuje refresh_token, więc drugie równoległe zapytanie użyłoby zużytego.
-  var refreshing = null;
-
   function validSession() {
     var s = currentSession();
     if (!s) return Promise.reject(fail('session_expired'));
     if (!needsRefresh(s, Date.now())) return Promise.resolve(s);
-    if (!refreshing) {
-      refreshing = authRequest('/token?grant_type=refresh_token', { refresh_token: s.refresh_token })
-        .then(function (data) {
-          return store(toSession(data, s.login));
-        }, function (err) {
-          if (err.code === 'network') throw err;
-          clear();
-          throw fail('session_expired', err);
-        })
-        .then(function (fresh) {
-          refreshing = null;
-          return fresh;
-        }, function (err) {
-          refreshing = null;
-          throw err;
-        });
-    }
-    return refreshing;
+    if (refreshing) return refreshing;
+
+    var gen = generation;
+    var mine = authRequest('/token?grant_type=refresh_token', { refresh_token: s.refresh_token })
+      .then(function (data) {
+        if (gen !== generation) throw fail('session_changed');
+        return store(toSession(data, s.login));
+      }, function (err) {
+        if (gen !== generation) throw fail('session_changed', err);
+        // Wylogowuje tylko odmowa serwera; awaria (5xx, 429) albo brak sieci zostawia sesję na kolejną próbę.
+        if (err.status !== 400 && err.status !== 401) throw err;
+        clear();
+        throw fail('session_expired', err, err.status);
+      })
+      .then(function (fresh) {
+        if (refreshing === mine) refreshing = null;
+        return fresh;
+      }, function (err) {
+        if (refreshing === mine) refreshing = null;
+        throw err;
+      });
+    refreshing = mine;
+    return mine;
   }
 
   global.SnakeAccount = {
