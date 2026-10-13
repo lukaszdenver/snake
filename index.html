@@ -110,6 +110,7 @@
       var L = window.SnakeLogic;
       var R = window.SnakeRanking;
       var NAME_KEY = 'snake.imie';
+      var FOCUS_DELAY_MS = 400;
       var CELL = 24;
       var MAX_STEPS_PER_FRAME = 5;
       var COLORS = {
@@ -190,8 +191,13 @@
         msgEl.hidden = true;
         btnEl.disabled = submitting;
         formEl.hidden = false;
-        inputEl.focus();
-        inputEl.select();
+        var forGame = gameId;
+        // Opóźnienie: klawisze WSAD wciśnięte tuż przed śmiercią nie nadpisują zapamiętanego imienia.
+        setTimeout(function () {
+          if (forGame !== gameId || formEl.hidden) return;
+          inputEl.focus();
+          inputEl.select();
+        }, FOCUS_DELAY_MS);
       }
 
       function newGame() {
@@ -218,8 +224,8 @@
           if (forGame === gameId) hideForm();
           return refreshTop();
         }, function () {
-          // Po restarcie komunikat o starej grze byłby mylący.
-          if (forGame === gameId) msgEl.hidden = false;
+          // Po restarcie albo zamknięciu formularza (Esc) komunikat nie miałby czego dotyczyć.
+          if (forGame === gameId && !formEl.hidden) msgEl.hidden = false;
         }).then(function () {
           submitting = false;
           btnEl.disabled = false;
