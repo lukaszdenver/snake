@@ -26,6 +26,7 @@
   <ol id="results"></ol>
 
   <script src="snake-logic.js"></script>
+  <script src="konto.js"></script>
   <script src="ranking.js"></script>
   <script src="tlo-animacja.js"></script>
   <script>
@@ -35,6 +36,7 @@
       var L = window.SnakeLogic;
       var D = L.DIRECTIONS;
       var R = window.SnakeRanking;
+      var A = window.SnakeAccount;
       var S = window.SnakeSky;
       var results = [];
 
@@ -297,54 +299,6 @@
         eq(s.status, 'won', 'status');
       });
 
-      // Lista rankingowa z podanych punktów, już posortowana malejąco.
-      function topOf(points) {
-        return points.map(function (p, i) { return { imie: 'gracz' + i, punkty: p }; });
-      }
-
-      test('22. normalizeName przycina spacje z obu stron', function () {
-        eq(R.normalizeName('  Ala  '), 'Ala');
-        eq(R.normalizeName('\tOla Nowak\n'), 'Ola Nowak');
-      });
-
-      test('23. normalizeName zwraca null dla pustego napisu i samych spacji', function () {
-        eq(R.normalizeName(''), null, 'pusty');
-        eq(R.normalizeName('    '), null, 'spacje');
-        eq(R.normalizeName(' \t\n '), null, 'białe znaki');
-        eq(R.normalizeName(null), null, 'null');
-      });
-
-      test('24. normalizeName skraca imię dłuższe niż 20 znaków do 20', function () {
-        eq(R.normalizeName('abcdefghijklmnopqrstuvwxyz'), 'abcdefghijklmnopqrst');
-        eq(R.normalizeName('abcdefghijklmnopqrst'), 'abcdefghijklmnopqrst', 'dokładnie 20');
-        // Spacja na 20. pozycji po skróceniu nie zostaje na końcu.
-        eq(R.normalizeName('abcdefghijklmnopqrs tuvwxyz'), 'abcdefghijklmnopqrs');
-      });
-
-      test('25. normalizeName liczy emoji jako jeden znak', function () {
-        var many = new Array(26).join('😀');  // 25 emoji
-        var out = R.normalizeName(many);
-        eq(Array.from(out).length, 20, 'punkty kodowe');
-        eq(out, new Array(21).join('😀'), 'treść');
-      });
-
-      test('26. qualifies: lista krótsza niż 10, wynik >= 1', function () {
-        eq(R.qualifies([], 1), true, 'pusta lista');
-        eq(R.qualifies(topOf([50, 40, 30]), 2), true, '3 wpisy');
-        eq(R.qualifies(topOf([9, 8, 7, 6, 5, 4, 3, 2, 1]), 1), true, '9 wpisów');
-      });
-
-      test('27. qualifies: wynik 0 nigdy się nie kwalifikuje', function () {
-        eq(R.qualifies([], 0), false);
-      });
-
-      test('28. qualifies przy pełnej liście: tylko wynik większy od 10. miejsca', function () {
-        var full = topOf([100, 90, 80, 70, 60, 50, 40, 30, 20, 10]);
-        eq(R.qualifies(full, 11), true, 'większy');
-        eq(R.qualifies(full, 10), false, 'równy');
-        eq(R.qualifies(full, 9), false, 'mniejszy');
-      });
-
       // Prosty generator liczb pseudolosowych z ziarnem, żeby gwiazdki były różne, ale powtarzalne.
       function seededRng(seed) {
         var s = seed;
@@ -354,7 +308,7 @@
         };
       }
 
-      test('29. createSky: 40 gwiazdek na planszy, promień 0,6–1,6 px, rytm 2–6 s', function () {
+      test('22. createSky: 40 gwiazdek na planszy, promień 0,6–1,6 px, rytm 2–6 s', function () {
         var sky = S.createSky(480, 480, seededRng(7));
         eq(sky.stars.length, 40, 'liczba gwiazdek');
         sky.stars.forEach(function (st, i) {
@@ -364,11 +318,11 @@
         });
       });
 
-      test('30. createSky z tym samym ziarnem daje te same gwiazdki', function () {
+      test('23. createSky z tym samym ziarnem daje te same gwiazdki', function () {
         eq(S.createSky(480, 480, seededRng(3)).stars, S.createSky(480, 480, seededRng(3)).stars);
       });
 
-      test('31. starBrightness w zakresie 0–1, z wyraźnym rozbłyskiem i przygaśnięciem', function () {
+      test('24. starBrightness w zakresie 0–1, z wyraźnym rozbłyskiem i przygaśnięciem', function () {
         var st = S.createSky(480, 480, seededRng(11)).stars[0];
         var min = 1, max = 0;
         for (var t = 0; t < st.period; t += 10) {
@@ -381,7 +335,7 @@
         assert(min < 0.2, 'brak przygaśnięcia, min=' + min);
       });
 
-      test('32. Pierwsza spadająca gwiazda po 4–12 s', function () {
+      test('25. Pierwsza spadająca gwiazda po 4–12 s', function () {
         var early = S.createSky(480, 480, fixedRng(0));
         eq(S.updateShootingStar(early, 0), null, 'start');
         eq(S.updateShootingStar(early, 3999), null, 'przed 4 s');
@@ -393,7 +347,7 @@
         assert(S.updateShootingStar(late, 12000) !== null, 'brak gwiazdy po 12 s');
       });
 
-      test('33. Spadająca gwiazda trwa 0,7 s, następna po kolejnych 4–12 s', function () {
+      test('26. Spadająca gwiazda trwa 0,7 s, następna po kolejnych 4–12 s', function () {
         var sky = S.createSky(480, 480, fixedRng(0));
         S.updateShootingStar(sky, 0);
         var shot = S.updateShootingStar(sky, 4000);
@@ -405,7 +359,7 @@
         assert(S.updateShootingStar(sky, 8700) !== null, 'brak następnej po 4 s przerwy');
       });
 
-      test('34. Spadająca gwiazda leci w dół i w prawo, startuje na planszy', function () {
+      test('27. Spadająca gwiazda leci w dół i w prawo, startuje na planszy', function () {
         var sky = S.createSky(480, 480, seededRng(5));
         var t = 0;
         S.updateShootingStar(sky, t);
@@ -415,6 +369,57 @@
         assert(shot.dx > 0 && shot.dy > 0, 'kierunek ' + shot.dx + ',' + shot.dy);
         assert(shot.x >= 0 && shot.x < 480 && shot.y >= 0 && shot.y < 480, 'start poza planszą');
         assert(shot.length >= 60 && shot.length <= 110, 'długość ' + shot.length);
+      });
+
+      test('28. normalizeLogin przycina i zamienia na małe litery', function () {
+        eq(A.normalizeLogin('  Lukasz '), 'lukasz');
+        eq(A.normalizeLogin('Ala_1'), 'ala_1');
+      });
+
+      test('29. normalizeLogin odrzuca niepoprawne loginy', function () {
+        ['', 'ab', 'abcdefghijklmnopqrstu', 'łukasz', 'jan kowalski', 'a-b', null].forEach(function (raw) {
+          eq(A.normalizeLogin(raw), null, JSON.stringify(raw));
+        });
+      });
+
+      test('30. normalizeLogin przyjmuje 3 i 20 znaków', function () {
+        eq(A.normalizeLogin('abc'), 'abc');
+        eq(A.normalizeLogin('abcdefghijklmnopqrst'), 'abcdefghijklmnopqrst');
+      });
+
+      test('31. passwordError: 8 znaków do 72 bajtów', function () {
+        eq(A.passwordError('1234567'), 'too_short', '7 znaków');
+        eq(A.passwordError('12345678'), null, '8 znaków');
+        eq(A.passwordError(new Array(73).join('a')), null, '72 bajty');
+        eq(A.passwordError(new Array(38).join('ł')), 'too_long', '37 × ł = 74 bajty');
+      });
+
+      test('32. loginToEmail dokleja domenę techniczną', function () {
+        eq(A.loginToEmail('lukasz'), 'lukasz@gracze.example.com');
+      });
+
+      test('33. needsRefresh: margines 60 s', function () {
+        var now = 1000000000000;
+        eq(A.needsRefresh({ expires_at: now / 1000 + 120 }, now), false, 'za 120 s');
+        eq(A.needsRefresh({ expires_at: now / 1000 + 59 }, now), true, 'za 59 s');
+        eq(A.needsRefresh({ expires_at: now / 1000 - 5 }, now), true, 'wygasła');
+      });
+
+      test('34. authErrorCode tłumaczy kody Supabase Auth', function () {
+        eq(A.authErrorCode(422, { error_code: 'user_already_exists' }), 'login_taken');
+        eq(A.authErrorCode(400, { error_code: 'invalid_credentials' }), 'invalid_credentials');
+        eq(A.authErrorCode(422, { error_code: 'weak_password' }), 'weak_password');
+        eq(A.authErrorCode(500, { error_code: 'unexpected_failure' }), 'unknown');
+        eq(A.authErrorCode(502, null), 'unknown');
+      });
+
+      test('35. isPersonalBest: lepszy od najlepszego własnego wyniku', function () {
+        eq(R.isPersonalBest([], 1), true, 'pierwsza gra');
+        eq(R.isPersonalBest([], 0), false, 'zero punktów');
+        var mine = [{ punkty: 10 }, { punkty: 7 }];
+        eq(R.isPersonalBest(mine, 11), true, 'lepszy');
+        eq(R.isPersonalBest(mine, 10), false, 'równy');
+        eq(R.isPersonalBest(mine, 9), false, 'gorszy');
       });
 
       var list = document.getElementById('results');

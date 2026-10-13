@@ -1,62 +1,64 @@
-// Ranking top 10 w Supabase. Bez DOM i Canvas; jedyny kontakt z otoczeniem to fetch i eksport window.SnakeRanking.
+// Ranking gry Snake w Supabase w imieniu zalogowanego gracza. Bez DOM i Canvas;
+// jedyny kontakt z otoczeniem to fetch i eksport window.SnakeRanking.
 (function (global) {
   'use strict';
 
   var TOP_N = 10;
-  var MAX_NAME = 20;
   var TIMEOUT_MS = 8000;
-  var ENDPOINT = 'https://bakmagtitoppdzuolyvg.supabase.co/rest/v1/wyniki';
-  // Klucz publishable jest publiczny z założenia; dostęp ogranicza RLS w supabase/ranking.sql.
+  var REST_URL = 'https://bakmagtitoppdzuolyvg.supabase.co/rest/v1';
+  // Klucz publishable jest publiczny z założenia; dostęp ogranicza RLS w supabase/konta.sql.
   var API_KEY = 'sb_publishable_gTyd8RfeoCgdeFwVjXxVRA_9BV-POkI';
 
-  // Długość liczona w punktach kodowych, tak jak char_length w Postgresie (emoji = 1 znak).
-  function normalizeName(raw) {
-    var trimmed = String(raw == null ? '' : raw).trim();
-    var name = Array.from(trimmed).slice(0, MAX_NAME).join('').trim();
-    return name ? name : null;
-  }
-
-  // Remis z 10. miejscem nie wystarcza: przy równych punktach wyżej jest starszy wpis.
-  function qualifies(top, score) {
+  // Remis z dotychczasowym rekordem nie jest nowym rekordem.
+  function isPersonalBest(myTop, score) {
     if (score < 1) return false;
-    return top.length < TOP_N || score > top[TOP_N - 1].punkty;
+    return myTop.length === 0 || score > myTop[0].punkty;
   }
 
-  // fetch z kluczem i limitem czasu; status spoza 2xx to błąd.
-  function request(url, options) {
+  // fetch z kluczem, tokenem gracza i limitem czasu (także na odczyt treści); status spoza 2xx to błąd.
+  function request(session, path, options) {
     var ctrl = new AbortController();
     var timer = setTimeout(function () { ctrl.abort(); }, TIMEOUT_MS);
     options.signal = ctrl.signal;
-    options.headers = Object.assign({ apikey: API_KEY }, options.headers);
-    return fetch(url, options).then(function (res) {
-      clearTimeout(timer);
-      if (!res.ok) throw new Error('HTTP ' + res.status);
-      return res;
-    }, function (err) {
-      clearTimeout(timer);
-      throw err;
-    });
+    options.headers = Object.assign({ apikey: API_KEY, Authorization: 'Bearer ' + session.access_token }, options.headers);
+    return fetch(REST_URL + path, options)
+      .then(function (res) {
+        return res.text().then(function (text) {
+          if (!res.ok) throw new Error('HTTP ' + res.status);
+          return text ? JSON.parse(text) : null;
+        });
+      })
+      .then(function (data) {
+        clearTimeout(timer);
+        return data;
+      }, function (err) {
+        clearTimeout(timer);
+        throw err;
+      });
   }
 
-  function fetchTop() {
-    var url = ENDPOINT + '?select=imie,punkty&order=punkty.desc,utworzono.asc&limit=' + TOP_N;
-    return request(url, { method: 'GET' }).then(function (res) { return res.json(); });
+  function fetchGlobalTop(session) {
+    return request(session, '/najlepsze_wyniki?select=login,punkty&order=punkty.desc,utworzono.asc&limit=' + TOP_N, { method: 'GET' });
   }
 
-  function submit(name, score) {
-    var imie = normalizeName(name);
-    if (imie === null) return Promise.reject(new Error('Puste imię'));
-    return request(ENDPOINT, {
+  function fetchMyTop(session) {
+    var path = '/wyniki?select=punkty,utworzono&gracz_id=eq.' + encodeURIComponent(session.user_id) +
+      '&order=punkty.desc,utworzono.asc&limit=' + TOP_N;
+    return request(session, path, { method: 'GET' });
+  }
+
+  function submit(session, score) {
+    return request(session, '/wyniki', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Prefer: 'return=minimal' },
-      body: JSON.stringify({ imie: imie, punkty: score })
+      body: JSON.stringify({ punkty: score })
     }).then(function () {});
   }
 
   global.SnakeRanking = {
-    normalizeName: normalizeName,
-    qualifies: qualifies,
-    fetchTop: fetchTop,
+    isPersonalBest: isPersonalBest,
+    fetchGlobalTop: fetchGlobalTop,
+    fetchMyTop: fetchMyTop,
     submit: submit
   };
 })(window);
