@@ -17,6 +17,8 @@ alter table public.wyniki enable row level security;
 
 -- Najpierw odbieramy wszystko, potem nadajemy tylko to, czego potrzebuje gra.
 revoke all on public.wyniki from anon, authenticated;
+-- Domyślne uprawnienia Supabase dają anon dostęp do nowych sekwencji; identity go nie potrzebuje.
+revoke all on sequence public.wyniki_id_seq from anon, authenticated;
 grant select on public.wyniki to anon;
 -- Gracz ustawia tylko imię i punkty; id i utworzono nadaje baza.
 grant insert (imie, punkty) on public.wyniki to anon;
