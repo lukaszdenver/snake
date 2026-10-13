@@ -121,6 +121,25 @@
         text: '#e2e8f0'
       };
 
+      // Grafiki; dopóki plik się nie wczyta (albo gdy go brak), element rysuje się zastępczo kolorem.
+      function loadImage(src) {
+        var img = new Image();
+        img.src = src;
+        return img;
+      }
+
+      function isLoaded(img) {
+        return img.complete && img.naturalWidth > 0;
+      }
+
+      var IMAGES = {
+        bg: loadImage('img/tlo.jpg'),
+        head: loadImage('img/glowa.png'),
+        fruits: [loadImage('img/jablko.png'), loadImage('img/wisnia.png'), loadImage('img/winogrono.png')]
+      };
+      var fruitIndex = 0;
+      var fruitKey = null;   // pozycja jedzenia, dla której wylosowano owoc
+
       var KEY_TO_DIR = {
         arrowup: 'up', w: 'up',
         arrowdown: 'down', s: 'down',
@@ -256,6 +275,14 @@
         }
       });
 
+      function drawBackground() {
+        if (isLoaded(IMAGES.bg)) {
+          ctx.drawImage(IMAGES.bg, 0, 0, canvas.width, canvas.height);
+        } else {
+          drawGrid();
+        }
+      }
+
       function drawGrid() {
         ctx.fillStyle = COLORS.bg;
         ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -278,6 +305,53 @@
         ctx.fillRect(cell.x * CELL + inset, cell.y * CELL + inset, CELL - inset * 2, CELL - inset * 2);
       }
 
+      // Segment ciała z zaokrąglonymi rogami; starsze przeglądarki bez roundRect dostają zwykły kwadrat.
+      function drawSegment(cell, color) {
+        var inset = 2;
+        if (!ctx.roundRect) {
+          drawCell(cell, color, inset);
+          return;
+        }
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.roundRect(cell.x * CELL + inset, cell.y * CELL + inset, CELL - inset * 2, CELL - inset * 2, 7);
+        ctx.fill();
+      }
+
+      // Grafika jest zwrócona w prawo, więc obracamy ją o kąt kierunku ruchu.
+      function drawSprite(img, cell, size, angle) {
+        ctx.save();
+        ctx.translate(cell.x * CELL + CELL / 2, cell.y * CELL + CELL / 2);
+        if (angle) ctx.rotate(angle);
+        ctx.drawImage(img, -size / 2, -size / 2, size, size);
+        ctx.restore();
+      }
+
+      function drawFood(food) {
+        var key = food.x + ',' + food.y;
+        if (key !== fruitKey) {
+          fruitKey = key;
+          fruitIndex = Math.floor(Math.random() * IMAGES.fruits.length);
+        }
+        var img = IMAGES.fruits[fruitIndex];
+        if (isLoaded(img)) {
+          drawSprite(img, food, CELL + 4, 0);
+          return;
+        }
+        ctx.fillStyle = COLORS.food;
+        ctx.beginPath();
+        ctx.arc(food.x * CELL + CELL / 2, food.y * CELL + CELL / 2, CELL / 2 - 4, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      function drawHead(head, direction) {
+        if (isLoaded(IMAGES.head)) {
+          drawSprite(IMAGES.head, head, CELL + 2, Math.atan2(direction.y, direction.x));
+        } else {
+          drawCell(head, COLORS.head, 1);
+        }
+      }
+
       // Tęcza wzdłuż ciała: każdy segment przesunięty o stały odcień.
       function bodyColor(index) {
         return 'hsl(' + ((index * 25) % 360) + ', 90%, 60%)';
@@ -297,17 +371,12 @@
       }
 
       function render() {
-        drawGrid();
+        drawBackground();
 
-        if (state.food) {
-          ctx.fillStyle = COLORS.food;
-          ctx.beginPath();
-          ctx.arc(state.food.x * CELL + CELL / 2, state.food.y * CELL + CELL / 2, CELL / 2 - 4, 0, Math.PI * 2);
-          ctx.fill();
-        }
+        if (state.food) drawFood(state.food);
 
-        for (var i = state.snake.length - 1; i >= 1; i--) drawCell(state.snake[i], bodyColor(i), 2);
-        drawCell(state.snake[0], COLORS.head, 1);
+        for (var i = state.snake.length - 1; i >= 1; i--) drawSegment(state.snake[i], bodyColor(i));
+        drawHead(state.snake[0], state.direction);
 
         scoreEl.textContent = 'Punkty: ' + state.score;
 

@@ -20,6 +20,7 @@ Klasyczny Snake uruchamiany dwuklikiem na pliku `index.html`, bez serwera, bez `
 | `ranking.js` | Komunikacja z rankingiem w Supabase i czyste funkcje pomocnicze rankingu. Zero DOM, zero Canvas. | brak (`fetch` przeglądarki) |
 | `index.html` | Prezentacja: Canvas, style, pętla czasu, rysowanie, odczyt klawiatury, lista top 10 i formularz imienia. | `snake-logic.js`, `ranking.js` |
 | `tests.html` | Runner testów logiki i funkcji pomocniczych rankingu z wypisem wyników w przeglądarce. | `snake-logic.js`, `ranking.js` |
+| `img/` | Grafiki planszy: tło, trzy owoce, głowa węża (sekcja 8). | brak |
 | `supabase/ranking.sql` | Skrypt tworzący tabelę rankingu, ograniczenia i reguły dostępu. Uruchamiany ręcznie w SQL Editor Supabase. | brak |
 
 Oba pliki HTML ładują skrypty zwykłym `<script src="..."></script>`.
@@ -105,8 +106,13 @@ Jeden obiekt globalny `window.SnakeLogic`:
   - `ready` — „Strzałki lub WSAD — start"
   - `over` — „Koniec gry · Punkty: N" + „Spacja — nowa gra"
   - `won` — „Wygrana! Plansza zapełniona" + „Spacja — nowa gra"
-- Paleta: tło `#10141c`, delikatna siatka `#1a2030`, ciało węża w tęczy (`hsl(i·25 mod 360, 90%, 60%)` dla segmentu `i`), głowa `#ffffff`, jedzenie `#ef4444`, tekst `#e2e8f0`.
-- Głowa odróżniona kolorem od ciała, żeby kierunek był czytelny.
+- Grafiki z katalogu `img/`:
+  - `tlo.jpg` — gwiaździste niebo na całą planszę (bez siatki).
+  - `jablko.png`, `wisnia.png`, `winogrono.png` — jedzenie; owoc losowany przy każdym nowym położeniu jedzenia, rysowany w rozmiarze komórki + 4 px.
+  - `glowa.png` — głowa węża narysowana w prawo, obracana o kąt bieżącego kierunku ruchu.
+- Ciało węża w tęczy (`hsl(i·25 mod 360, 90%, 60%)` dla segmentu `i`), segmenty z zaokrąglonymi rogami (promień 7 px; bez `roundRect` — zwykły kwadrat).
+- Gdy grafika się nie wczytała, element rysuje się zastępczo: tło `#10141c` z siatką `#1a2030`, jedzenie jako koło `#ef4444`, głowa jako biały kwadrat `#ffffff`. Tekst `#e2e8f0`.
+- Głowa odróżniona od ciała, żeby kierunek był czytelny.
 
 ## 9. Ranking top 10 (Supabase)
 
