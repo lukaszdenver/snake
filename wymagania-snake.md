@@ -20,6 +20,7 @@ Klasyczny Snake uruchamiany dwuklikiem na pliku `index.html`, bez serwera, bez `
 | `ranking.js` | Komunikacja z rankingiem w Supabase i czyste funkcje pomocnicze rankingu. Zero DOM, zero Canvas. | brak (`fetch` przeglądarki) |
 | `index.html` | Prezentacja: Canvas, style, pętla czasu, rysowanie, odczyt klawiatury, lista top 10 i formularz imienia. | `snake-logic.js`, `ranking.js` |
 | `tests.html` | Runner testów logiki i funkcji pomocniczych rankingu z wypisem wyników w przeglądarce. | `snake-logic.js`, `ranking.js` |
+| `tlo-animacja.js` | Animowane niebo: migające gwiazdki i spadające gwiazdy (sekcja 8). Rysuje na podanym kontekście Canvas. | brak |
 | `img/` | Grafiki planszy: tło, trzy owoce, głowa węża (sekcja 8). | brak |
 | `supabase/ranking.sql` | Skrypt tworzący tabelę rankingu, ograniczenia i reguły dostępu. Uruchamiany ręcznie w SQL Editor Supabase. | brak |
 
@@ -110,6 +111,10 @@ Jeden obiekt globalny `window.SnakeLogic`:
   - `tlo.jpg` — gwiaździste niebo na całą planszę (bez siatki).
   - `jablko.png`, `wisnia.png`, `winogrono.png` — jedzenie; owoc losowany przy każdym nowym położeniu jedzenia, rysowany w rozmiarze komórki + 4 px.
   - `glowa.png` — głowa węża narysowana w prawo, obracana o kąt bieżącego kierunku ruchu.
+- Animowane niebo (`tlo-animacja.js`, obiekt `window.SnakeSky`), rysowane na tle w każdej klatce, także pod nakładkami:
+  - 40 migających gwiazdek (promień 0,6–1,6 px, kolor biały / złotawy / bladoniebieski, rytm 2–6 s, jasność `0,15 + 0,85·(½ + ½·sin)^4`); co czwarta w szczycie rozbłysku dostaje czteroramienny błysk.
+  - Spadająca gwiazda co 4–12 s (losowo): smuga 60–110 px po skosie w dół i w prawo, trwa 0,7 s, płynnie się pojawia i znika.
+  - Przy systemowym „ogranicz animacje” (`prefers-reduced-motion: reduce`) gwiazdki świecą stałym blaskiem, a spadających gwiazd nie ma.
 - Ciało węża w tęczy (`hsl(i·25 mod 360, 90%, 60%)` dla segmentu `i`), segmenty z zaokrąglonymi rogami (promień 7 px; bez `roundRect` — zwykły kwadrat).
 - Gdy grafika się nie wczytała, element rysuje się zastępczo: tło `#10141c` z siatką `#1a2030`, jedzenie jako koło `#ef4444`, głowa jako biały kwadrat `#ffffff`. Tekst `#e2e8f0`.
 - Głowa odróżniona od ciała, żeby kierunek był czytelny.

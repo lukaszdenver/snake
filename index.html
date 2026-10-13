@@ -103,6 +103,7 @@
 
   <script src="snake-logic.js"></script>
   <script src="ranking.js"></script>
+  <script src="tlo-animacja.js"></script>
   <script>
     (function () {
       'use strict';
@@ -149,6 +150,8 @@
 
       var canvas = document.getElementById('board');
       var ctx = canvas.getContext('2d');
+      var sky = window.SnakeSky.createSky(canvas.width, canvas.height);
+      var reducedMotion = window.matchMedia ? window.matchMedia('(prefers-reduced-motion: reduce)') : null;
       var scoreEl = document.getElementById('score');
       var formEl = document.getElementById('save-form');
       var inputEl = document.getElementById('name-input');
@@ -275,12 +278,13 @@
         }
       });
 
-      function drawBackground() {
+      function drawBackground(now) {
         if (isLoaded(IMAGES.bg)) {
           ctx.drawImage(IMAGES.bg, 0, 0, canvas.width, canvas.height);
         } else {
           drawGrid();
         }
+        window.SnakeSky.draw(ctx, sky, now, reducedMotion !== null && reducedMotion.matches);
       }
 
       function drawGrid() {
@@ -370,8 +374,8 @@
         }
       }
 
-      function render() {
-        drawBackground();
+      function render(now) {
+        drawBackground(now);
 
         if (state.food) drawFood(state.food);
 
@@ -409,7 +413,7 @@
           accumulator = 0;
         }
 
-        render();
+        render(now);
         requestAnimationFrame(frame);
       }
 

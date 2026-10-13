@@ -27,6 +27,7 @@
 
   <script src="snake-logic.js"></script>
   <script src="ranking.js"></script>
+  <script src="tlo-animacja.js"></script>
   <script>
     (function () {
       'use strict';
@@ -34,6 +35,7 @@
       var L = window.SnakeLogic;
       var D = L.DIRECTIONS;
       var R = window.SnakeRanking;
+      var S = window.SnakeSky;
       var results = [];
 
       function test(name, fn) {
@@ -341,6 +343,78 @@
         eq(R.qualifies(full, 11), true, 'większy');
         eq(R.qualifies(full, 10), false, 'równy');
         eq(R.qualifies(full, 9), false, 'mniejszy');
+      });
+
+      // Prosty generator liczb pseudolosowych z ziarnem, żeby gwiazdki były różne, ale powtarzalne.
+      function seededRng(seed) {
+        var s = seed;
+        return function () {
+          s = (s * 1664525 + 1013904223) % 4294967296;
+          return s / 4294967296;
+        };
+      }
+
+      test('29. createSky: 40 gwiazdek na planszy, promień 0,6–1,6 px, rytm 2–6 s', function () {
+        var sky = S.createSky(480, 480, seededRng(7));
+        eq(sky.stars.length, 40, 'liczba gwiazdek');
+        sky.stars.forEach(function (st, i) {
+          assert(st.x >= 0 && st.x < 480 && st.y >= 0 && st.y < 480, 'gwiazdka ' + i + ' poza planszą');
+          assert(st.r >= 0.6 && st.r <= 1.6, 'promień gwiazdki ' + i + ': ' + st.r);
+          assert(st.period >= 2000 && st.period <= 6000, 'rytm gwiazdki ' + i + ': ' + st.period);
+        });
+      });
+
+      test('30. createSky z tym samym ziarnem daje te same gwiazdki', function () {
+        eq(S.createSky(480, 480, seededRng(3)).stars, S.createSky(480, 480, seededRng(3)).stars);
+      });
+
+      test('31. starBrightness w zakresie 0–1, z wyraźnym rozbłyskiem i przygaśnięciem', function () {
+        var st = S.createSky(480, 480, seededRng(11)).stars[0];
+        var min = 1, max = 0;
+        for (var t = 0; t < st.period; t += 10) {
+          var b = S.starBrightness(st, t);
+          assert(b >= 0 && b <= 1, 'jasność ' + b + ' dla t=' + t);
+          min = Math.min(min, b);
+          max = Math.max(max, b);
+        }
+        assert(max > 0.95, 'brak rozbłysku, max=' + max);
+        assert(min < 0.2, 'brak przygaśnięcia, min=' + min);
+      });
+
+      test('32. Pierwsza spadająca gwiazda po 4–12 s', function () {
+        var early = S.createSky(480, 480, fixedRng(0));
+        eq(S.updateShootingStar(early, 0), null, 'start');
+        eq(S.updateShootingStar(early, 3999), null, 'przed 4 s');
+        assert(S.updateShootingStar(early, 4000) !== null, 'brak gwiazdy po 4 s przy rng=0');
+
+        var late = S.createSky(480, 480, fixedRng(0.999999));
+        eq(S.updateShootingStar(late, 0), null, 'start');
+        eq(S.updateShootingStar(late, 11900), null, 'przed 12 s przy rng≈1');
+        assert(S.updateShootingStar(late, 12000) !== null, 'brak gwiazdy po 12 s');
+      });
+
+      test('33. Spadająca gwiazda trwa 0,7 s, następna po kolejnych 4–12 s', function () {
+        var sky = S.createSky(480, 480, fixedRng(0));
+        S.updateShootingStar(sky, 0);
+        var shot = S.updateShootingStar(sky, 4000);
+        assert(shot !== null, 'brak gwiazdy');
+        assert(shot.alpha >= 0 && shot.alpha <= 1, 'alfa poza 0–1');
+        assert(S.updateShootingStar(sky, 4699) !== null, 'zgasła przed 0,7 s');
+        eq(S.updateShootingStar(sky, 4700), null, 'nie zgasła po 0,7 s');
+        eq(S.updateShootingStar(sky, 8699), null, 'następna za wcześnie');
+        assert(S.updateShootingStar(sky, 8700) !== null, 'brak następnej po 4 s przerwy');
+      });
+
+      test('34. Spadająca gwiazda leci w dół i w prawo, startuje na planszy', function () {
+        var sky = S.createSky(480, 480, seededRng(5));
+        var t = 0;
+        S.updateShootingStar(sky, t);
+        var shot = null;
+        while (shot === null && t < 13000) { t += 50; shot = S.updateShootingStar(sky, t); }
+        assert(shot !== null, 'brak gwiazdy w 13 s');
+        assert(shot.dx > 0 && shot.dy > 0, 'kierunek ' + shot.dx + ',' + shot.dy);
+        assert(shot.x >= 0 && shot.x < 480 && shot.y >= 0 && shot.y < 480, 'start poza planszą');
+        assert(shot.length >= 60 && shot.length <= 110, 'długość ' + shot.length);
       });
 
       var list = document.getElementById('results');
