@@ -29,6 +29,7 @@
   <script src="konto.js"></script>
   <script src="ranking.js"></script>
   <script src="tlo-animacja.js"></script>
+  <script src="efekty.js"></script>
   <script>
     (function () {
       'use strict';
@@ -38,6 +39,7 @@
       var R = window.SnakeRanking;
       var A = window.SnakeAccount;
       var S = window.SnakeSky;
+      var F = window.SnakeFx;
       var results = [];
 
       function test(name, fn) {
@@ -420,6 +422,73 @@
         eq(R.isPersonalBest(mine, 11), true, 'lepszy');
         eq(R.isPersonalBest(mine, 10), false, 'równy');
         eq(R.isPersonalBest(mine, 9), false, 'gorszy');
+      });
+
+      test('36. burst: cząsteczki w kolorach palety, żywe od razu, znikają po czasie życia', function () {
+        var fx = F.createFx(seededRng(1));
+        F.burst(fx, 100, 100, ['#ff0000', '#00ff00'], 1000, 20, 0.3);
+        eq(fx.particles.length, 20, 'liczba');
+        fx.particles.forEach(function (p) {
+          assert(p.color === '#ff0000' || p.color === '#00ff00', 'kolor ' + p.color);
+          assert(p.life >= 400 && p.life <= 1000, 'czas życia ' + p.life);
+        });
+        F.prune(fx, 1000);
+        eq(fx.particles.length, 20, 'żywe na starcie');
+        F.prune(fx, 1000 + 1001);
+        eq(fx.particles.length, 0, 'po czasie życia');
+      });
+
+      test('37. particlePos: start w punkcie wybuchu, potem prędkość i grawitacja', function () {
+        var p = { x: 50, y: 60, vx: 0.1, vy: -0.2, g: 0.001, born: 0, life: 1000 };
+        eq(F.particlePos(p, 0), { x: 50, y: 60 }, 'start');
+        var q = F.particlePos(p, 100);
+        assert(Math.abs(q.x - 60) < 1e-9, 'x po 100 ms: ' + q.x);
+        assert(Math.abs(q.y - (60 - 20 + 5)) < 1e-9, 'y po 100 ms: ' + q.y);
+      });
+
+      test('38. shakeOffset: zero przed i po, wygasa w trakcie', function () {
+        var fx = F.createFx(seededRng(2));
+        eq(F.shakeOffset(fx, 500), { x: 0, y: 0 }, 'bez trzęsienia');
+        F.shake(fx, 1000, 10, 400);
+        var max = 0;
+        for (var t = 1000; t < 1400; t += 7) {
+          var o = F.shakeOffset(fx, t);
+          var p = (t - 1000) / 400;
+          var limit = 10 * (1 - p) * (1 - p) + 1e-9;
+          assert(Math.abs(o.x) <= limit && Math.abs(o.y) <= limit, 'za mocno dla t=' + t);
+          max = Math.max(max, Math.abs(o.x), Math.abs(o.y));
+        }
+        assert(max > 3, 'trzęsienie niewidoczne, max=' + max);
+        eq(F.shakeOffset(fx, 1400), { x: 0, y: 0 }, 'po końcu');
+      });
+
+      test('39. Limit cząsteczek: nigdy więcej niż 700', function () {
+        var fx = F.createFx(seededRng(3));
+        for (var i = 0; i < 10; i++) F.burst(fx, 0, 0, ['#fff'], 0, 100, 0.2);
+        assert(fx.particles.length <= 700, 'cząsteczek: ' + fx.particles.length);
+      });
+
+      test('40. floatText: wznosi się i gaśnie', function () {
+        var fx = F.createFx(seededRng(4));
+        F.floatText(fx, 100, 200, '+1', 0);
+        var a = F.textState(fx.texts[0], 0);
+        var b = F.textState(fx.texts[0], 400);
+        var c = F.textState(fx.texts[0], 800);
+        eq(a.alpha, 1, 'start');
+        assert(b.y < a.y, 'nie wznosi się');
+        assert(c.alpha === 0, 'nie zgasł, alpha=' + c.alpha);
+        F.prune(fx, 801);
+        eq(fx.texts.length, 0, 'nie usunięty');
+      });
+
+      test('41. confetti: zaczyna nad planszą i spada', function () {
+        var fx = F.createFx(seededRng(5));
+        F.confetti(fx, 480, 0, 120);
+        eq(fx.particles.length, 120, 'liczba');
+        fx.particles.forEach(function (p, i) {
+          assert(p.y < 0 && p.x >= 0 && p.x <= 480, 'start ' + i);
+          assert(F.particlePos(p, 1500).y > p.y, 'nie spada ' + i);
+        });
       });
 
       var list = document.getElementById('results');

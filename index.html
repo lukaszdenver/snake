@@ -171,6 +171,7 @@
   <script src="konto.js"></script>
   <script src="ranking.js"></script>
   <script src="tlo-animacja.js"></script>
+  <script src="efekty.js"></script>
   <script>
     (function () {
       'use strict';
@@ -217,6 +218,11 @@
       var canvas = document.getElementById('board');
       var ctx = canvas.getContext('2d');
       var sky = window.SnakeSky.createSky(canvas.width, canvas.height);
+      var FX = window.SnakeFx;
+      var fx = FX.createFx();
+      // Kolory iskier i poświaty dla owoców w kolejności IMAGES.fruits: jabłko, wiśnia, winogrono.
+      var FRUIT_SPARKS = [['#ff4d4d', '#ffb347', '#a3e635'], ['#ff1744', '#ff8a80', '#ffffff'], ['#b388ff', '#7c4dff', '#ea80fc']];
+      var FRUIT_GLOW = ['255, 80, 80', '255, 40, 90', '180, 120, 255'];
       var reducedMotion = window.matchMedia ? window.matchMedia('(prefers-reduced-motion: reduce)') : null;
       var scoreEl = document.getElementById('score');
       var playerEl = document.getElementById('player');
@@ -426,9 +432,29 @@
       }
 
       // Wywoływane raz, w klatce, w której gra przeszła z 'running' na 'over' albo 'won'.
-      function onGameEnd() {
+      function onGameEnd(now) {
         personalBest = myTop !== null && R.isPersonalBest(myTop, state.score);
         if (state.score >= 1) saveScore(state.score);
+        if (!motionOk()) return;
+        if (state.status === 'over') {
+          // Wąż rozsypuje się w iskry w kolorach swoich segmentów.
+          for (var i = 0; i < Math.min(state.snake.length, 80); i++) {
+            var c = cellCenter(state.snake[i]);
+            FX.burst(fx, c.x, c.y, [i === 0 ? '#ffffff' : bodyColor(i, now)], now, 5, 0.18);
+          }
+          FX.shake(fx, now, 12, 450);
+          FX.flash(fx, now, '#ef4444', 260);
+        }
+        if (state.status === 'won' || personalBest) FX.confetti(fx, canvas.width, now, state.status === 'won' ? 220 : 140);
+      }
+
+      function onEat(cell, now) {
+        var c = cellCenter(cell);
+        FX.floatText(fx, c.x, c.y - 6, '+1', now, '#fde68a');
+        if (!motionOk()) return;
+        FX.burst(fx, c.x, c.y, FRUIT_SPARKS[fruitIndex], now, 22, 0.25);
+        FX.ring(fx, c.x, c.y, 'rgba(' + FRUIT_GLOW[fruitIndex] + ', 1)', now);
+        FX.shake(fx, now, 3, 140);
       }
 
       retryBtn.addEventListener('click', function () {
@@ -539,23 +565,41 @@
       }
 
       // Grafika jest zwrócona w prawo, więc obracamy ją o kąt kierunku ruchu.
-      function drawSprite(img, cell, size, angle) {
+      function drawSprite(img, cell, size, angle, dy) {
         ctx.save();
-        ctx.translate(cell.x * CELL + CELL / 2, cell.y * CELL + CELL / 2);
+        ctx.translate(cell.x * CELL + CELL / 2, cell.y * CELL + CELL / 2 + (dy || 0));
         if (angle) ctx.rotate(angle);
         ctx.drawImage(img, -size / 2, -size / 2, size, size);
         ctx.restore();
       }
 
-      function drawFood(food) {
+      function motionOk() {
+        return !(reducedMotion !== null && reducedMotion.matches);
+      }
+
+      function cellCenter(cell) {
+        return { x: cell.x * CELL + CELL / 2, y: cell.y * CELL + CELL / 2 };
+      }
+
+      // Owoc unosi się i opada, a wokół niego pulsuje poświata w jego kolorze.
+      function drawFood(food, now) {
         var key = food.x + ',' + food.y;
         if (key !== fruitKey) {
           fruitKey = key;
           fruitIndex = Math.floor(Math.random() * IMAGES.fruits.length);
         }
+        var t = motionOk() ? now : 0;
+        var c = cellCenter(food);
+        var radius = CELL * 0.95 * (1 + 0.15 * Math.sin(t / 260));
+        var glow = ctx.createRadialGradient(c.x, c.y, 0, c.x, c.y, radius);
+        glow.addColorStop(0, 'rgba(' + FRUIT_GLOW[fruitIndex] + ', 0.55)');
+        glow.addColorStop(1, 'rgba(' + FRUIT_GLOW[fruitIndex] + ', 0)');
+        ctx.fillStyle = glow;
+        ctx.fillRect(c.x - radius, c.y - radius, radius * 2, radius * 2);
+
         var img = IMAGES.fruits[fruitIndex];
         if (isLoaded(img)) {
-          drawSprite(img, food, CELL + 4, 0);
+          drawSprite(img, food, CELL + 4, 0, Math.sin(t / 320) * 1.8);
           return;
         }
         ctx.fillStyle = COLORS.food;
@@ -566,15 +610,21 @@
 
       function drawHead(head, direction) {
         if (isLoaded(IMAGES.head)) {
+          ctx.save();
+          ctx.shadowColor = 'rgba(255, 255, 255, 0.85)';
+          ctx.shadowBlur = 14;
           drawSprite(IMAGES.head, head, CELL + 2, Math.atan2(direction.y, direction.x));
+          ctx.restore();
         } else {
           drawCell(head, COLORS.head, 1);
         }
       }
 
-      // Tęcza wzdłuż ciała: każdy segment przesunięty o stały odcień.
-      function bodyColor(index) {
-        return 'hsl(' + ((index * 25) % 360) + ', 90%, 60%)';
+      // Tęcza wzdłuż ciała: każdy segment przesunięty o stały odcień, a cała tęcza płynie od głowy do ogona.
+      function bodyColor(index, now) {
+        var flow = motionOk() ? now * 0.15 : 0;
+        var hue = ((index * 25 - flow) % 360 + 360) % 360;
+        return 'hsl(' + Math.round(hue) + ', 90%, 60%)';
       }
 
       function drawOverlay(lines) {
@@ -591,12 +641,19 @@
       }
 
       function render(now) {
+        var shakeBy = FX.shakeOffset(fx, now);
+        // Pod trzęsącą się planszą tło, żeby przy krawędziach nie zostawały ślady poprzedniej klatki.
+        ctx.fillStyle = COLORS.bg;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.save();
+        ctx.translate(shakeBy.x, shakeBy.y);
         drawBackground(now);
 
-        if (state.food) drawFood(state.food);
+        if (state.food) drawFood(state.food, now);
 
-        for (var i = state.snake.length - 1; i >= 1; i--) drawSegment(state.snake[i], bodyColor(i));
+        for (var i = state.snake.length - 1; i >= 1; i--) drawSegment(state.snake[i], bodyColor(i, now));
         drawHead(state.snake[0], state.direction);
+        ctx.restore();
 
         scoreEl.textContent = 'Punkty: ' + state.score;
 
@@ -610,6 +667,13 @@
           lines.push('Spacja — nowa gra');
           drawOverlay(lines);
         }
+
+        // Efekty nad nakładką: wybuch po śmierci i konfetti widać także na ekranie końca gry.
+        ctx.save();
+        ctx.translate(shakeBy.x, shakeBy.y);
+        FX.draw(ctx, fx, now);
+        ctx.restore();
+        FX.drawFlash(ctx, fx, now, canvas.width, canvas.height);
       }
 
       function frame(now) {
@@ -623,10 +687,12 @@
           var steps = 0;
           while (accumulator >= state.intervalMs && state.status === 'running' && steps < MAX_STEPS_PER_FRAME) {
             accumulator -= state.intervalMs;
+            var scoreBefore = state.score;
             L.step(state);
+            if (state.score > scoreBefore) onEat(state.snake[0], now);
             steps++;
           }
-          if (state.status === 'over' || state.status === 'won') onGameEnd();
+          if (state.status === 'over' || state.status === 'won') onGameEnd(now);
         } else {
           accumulator = 0;
         }
