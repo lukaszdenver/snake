@@ -26,12 +26,14 @@
   <ol id="results"></ol>
 
   <script src="snake-logic.js"></script>
+  <script src="ranking.js"></script>
   <script>
     (function () {
       'use strict';
 
       var L = window.SnakeLogic;
       var D = L.DIRECTIONS;
+      var R = window.SnakeRanking;
       var results = [];
 
       function test(name, fn) {
@@ -291,6 +293,54 @@
         L.step(s);
         eq(s.snake.length, 400, 'długość');
         eq(s.status, 'won', 'status');
+      });
+
+      // Lista rankingowa z podanych punktów, już posortowana malejąco.
+      function topOf(points) {
+        return points.map(function (p, i) { return { imie: 'gracz' + i, punkty: p }; });
+      }
+
+      test('22. normalizeName przycina spacje z obu stron', function () {
+        eq(R.normalizeName('  Ala  '), 'Ala');
+        eq(R.normalizeName('\tOla Nowak\n'), 'Ola Nowak');
+      });
+
+      test('23. normalizeName zwraca null dla pustego napisu i samych spacji', function () {
+        eq(R.normalizeName(''), null, 'pusty');
+        eq(R.normalizeName('    '), null, 'spacje');
+        eq(R.normalizeName(' \t\n '), null, 'białe znaki');
+        eq(R.normalizeName(null), null, 'null');
+      });
+
+      test('24. normalizeName skraca imię dłuższe niż 20 znaków do 20', function () {
+        eq(R.normalizeName('abcdefghijklmnopqrstuvwxyz'), 'abcdefghijklmnopqrst');
+        eq(R.normalizeName('abcdefghijklmnopqrst'), 'abcdefghijklmnopqrst', 'dokładnie 20');
+        // Spacja na 20. pozycji po skróceniu nie zostaje na końcu.
+        eq(R.normalizeName('abcdefghijklmnopqrs tuvwxyz'), 'abcdefghijklmnopqrs');
+      });
+
+      test('25. normalizeName liczy emoji jako jeden znak', function () {
+        var many = new Array(26).join('😀');  // 25 emoji
+        var out = R.normalizeName(many);
+        eq(Array.from(out).length, 20, 'punkty kodowe');
+        eq(out, new Array(21).join('😀'), 'treść');
+      });
+
+      test('26. qualifies: lista krótsza niż 10, wynik >= 1', function () {
+        eq(R.qualifies([], 1), true, 'pusta lista');
+        eq(R.qualifies(topOf([50, 40, 30]), 2), true, '3 wpisy');
+        eq(R.qualifies(topOf([9, 8, 7, 6, 5, 4, 3, 2, 1]), 1), true, '9 wpisów');
+      });
+
+      test('27. qualifies: wynik 0 nigdy się nie kwalifikuje', function () {
+        eq(R.qualifies([], 0), false);
+      });
+
+      test('28. qualifies przy pełnej liście: tylko wynik większy od 10. miejsca', function () {
+        var full = topOf([100, 90, 80, 70, 60, 50, 40, 30, 20, 10]);
+        eq(R.qualifies(full, 11), true, 'większy');
+        eq(R.qualifies(full, 10), false, 'równy');
+        eq(R.qualifies(full, 9), false, 'mniejszy');
       });
 
       var list = document.getElementById('results');
